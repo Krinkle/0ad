@@ -1,0 +1,51 @@
+# > https://docs.travis-ci.com/user/multi-os/
+# > https://docs.travis-ci.com/user/reference/osx/
+# > https://docs.travis-ci.com/user/build-matrix/
+jobs:
+  include:
+    # > https://trac.macports.org/wiki/XcodeVersionInfo
+    # > https://docs.travis-ci.com/user/reference/osx/#macos-version
+    - os: osx
+      # macOS 10.14 Mojave with Xcode 10.3 and Apple LLVM 10.0.1.
+      osx_image: xcode10.3
+    - os: osx
+      # macOS 10.14 Mojave with Xcode 11.3 and Apple LLVM 11.0.3.
+      osx_image: xcode11.3
+    - os: linux
+      compiler: clang
+    - os: linux
+      compiler: gcc
+
+# > https://docs.travis-ci.com/user/languages/minimal-and-generic/
+# > https://docs.travis-ci.com/user/languages/cpp/
+language: cpp
+
+# Speed up git-clone time (default git.depth is 50)
+# > https://docs.travis-ci.com/user/customizing-the-build/#git-clone-depth
+git:
+  depth: 2
+
+before_install:
+  # Extract cache of downloaded tarballs
+  - mkdir -p .0ad_ci_cache/libraries
+  - cp -Rln .0ad_ci_cache/libraries .
+
+# Use 3 jobs (2 cores + 1)
+# > https://docs.travis-ci.com/user/reference/overview/#virtualization-environments
+# > https://trac.wildfiregames.com/wiki/BuildInstructions#Buildthegame
+install:
+  # Hide stdout (keep stderr), avoid hitting 100K log output limit.
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then ./libraries/osx/build-osx-libs.sh -j3 > /dev/null; fi
+  - ./build/workspaces/update-workspaces.sh -j3 > /dev/null
+  - cd ./build/workspaces/gcc
+  - make -j3 pyrogenesis test
+
+script:
+  - binaries/system/test
+
+before_cache:
+  - mkdir -p .0ad_ci_cache
+  - find ./libraries -name '*.tar*' -type f -exec sh -c 'mkdir -p .0ad_ci_cache/$(dirname "{}")' ';' -exec cp -l '{}' '.0ad_ci_cache/{}' ';'
+cache:
+  directories:
+    - .0ad_ci_cache
